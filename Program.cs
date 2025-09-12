@@ -7,15 +7,7 @@ using System.Text.RegularExpressions;
 
 class Program
 {
-    // 첫 번째 코드에서 가져온 모든 Regex 패턴들
-    static readonly Regex BashDashCRegex =
-        new(@"(?:^|\s)-[A-Za-z]*c\s+(['""])(?<cmd>.+?)\1",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-    static readonly Regex SnapshotRegex =
-        new(@"[\\/]\.claude[\\/].*?[\\/]shell-snapshots[\\/]snapshot-bash-",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
+    // eval '...' 또는 eval "..." 패턴을 추출하기 위한 Regex. 가장 핵심적인 역할을 합니다.
     static readonly Regex EvalCmdRegex =
         new(@"eval\s+(['""])(?<cmd>.+?)\1",
             RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -58,49 +50,26 @@ class Program
                     
                     processTreePids.Add(data.ProcessID);
 
-                    // --- 로직 통합 시작 ---
+                    // --- 로직 수정 지점 ---
                     string imageName = data.ImageFileName ?? string.Empty;
                     string cmdline = data.CommandLine ?? string.Empty;
 
-                    // 자식 프로세스가 bash.exe일 경우, 상세 파싱 로직 실행
+                    // 자식 프로세스가 bash.exe일 경우, eval 명령어 추출 시도
                     if (imageName.EndsWith("bash.exe", StringComparison.OrdinalIgnoreCase))
                     {
-                        // 1) -c / -lc / -ic 뒤에 전달된 실제 명령 파싱
-                        var mDashC = BashDashCRegex.Match(cmdline);
-                        if (mDashC.Success)
+                        // 'eval "..."' 패턴을 찾아 최우선으로 파싱합니다.
+                        var mEval = EvalCmdRegex.Match(cmdline);
+                        if (mEval.Success)
                         {
-                            string userCmd = mDashC.Groups["cmd"].Value;
+                            // eval 패턴이 발견되면, 그 안의 내용만 최종 명령어로 간주하고 출력합니다.
+                            string finalCommand = mEval.Groups["cmd"].Value;
+
                             Console.ForegroundColor = ConsoleColor.Cyan;
-                            Console.WriteLine($"  -> [BASH CMD] PID: {data.ProcessID}, CMD: {userCmd}");
+                            Console.WriteLine($"  -> [EVAL CMD] PID: {data.ProcessID}, CMD: {finalCommand}");
                             Console.ResetColor();
                         }
-                        // 2) 스냅샷 경유 실행 시 힌트 출력 + eval 패턴이면 추가 파싱
-                        else if (SnapshotRegex.IsMatch(cmdline))
-                        {
-                            var mEval = EvalCmdRegex.Match(cmdline);
-                            if (mEval.Success)
-                            {
-                                string userCmd = mEval.Groups["cmd"].Value;
-                                Console.ForegroundColor = ConsoleColor.Cyan;
-                                Console.WriteLine($"  -> [BASH SNAPSHOT/EVAL] PID: {data.ProcessID}, CMD: {userCmd}");
-                                Console.ResetColor();
-                            }
-                            else
-                            {
-                                Console.ForegroundColor = ConsoleColor.Yellow;
-                                Console.WriteLine($"  -> [BASH SNAPSHOT 감지] PID: {data.ProcessID}, CMDLINE: {cmdline}");
-                                Console.ResetColor();
-                            }
-                        }
-                        // 3) 위 두 경우가 아니면 최소한 실행 사실은 기록
-                        else
-                        {
-                            Console.ForegroundColor = ConsoleColor.White;
-                            Console.WriteLine($"  -> [BASH 실행] PID: {data.ProcessID}, CMDLINE: {cmdline}");
-                            Console.ResetColor();
-                        }
+                        // eval 패턴이 없으면 아무것도 출력하지 않아, 원하는 로그만 필터링합니다.
                     }
-                    // --- 로직 통합 끝 ---
                 }
             };
 
