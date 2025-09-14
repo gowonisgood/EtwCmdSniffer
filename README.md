@@ -2,9 +2,11 @@
 program.cs : 메인 기능
 
 실행 방법
+1. claude code 실행 후 pid 확인
+
+2. 코드 실행
 
 ```
 dotnet run -- <pid>
 ```
-
-claude code 실행 후 명령어 실행
+3. claude code 에 명령어 입력
