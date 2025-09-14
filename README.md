@@ -8,4 +8,3 @@ dotnet run -- <pid>
 ```
 
 claude code 실행 후 명령어 실행
-자세한 방법은 노션 참조
